@@ -1,0 +1,529 @@
+{
+  "name": "EquityPro — Expired Listings Detection + Skip Trace + Deliver",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 10 }]
+        }
+      },
+      "id": "trigger",
+      "name": "Every 10 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.SUPABASE_URL }}/rest/v1/replication_state?resource=eq.Property&select=last_modification_timestamp",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        },
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "Bearer {{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        }
+      },
+      "id": "get_last_timestamp",
+      "name": "Get Last Timestamp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0],
+      "notes": "Reads the last ModificationTimestamp from Supabase to know where to pick up polling."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.MLSGRID_API_BASE_URL }}/Property?$filter=OriginatingSystemName eq 'mfrmls' and ModificationTimestamp gt {{ $json[0].last_modification_timestamp }} and StandardStatus eq 'Expired'&$top=200",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        },
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $vars.MLSGRID_ACCESS_TOKEN }}" }
+          ]
+        }
+      },
+      "id": "query_mls_grid",
+      "name": "Query MLS Grid — Expired",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0],
+      "notes": "Queries MLS Grid for all records modified since last timestamp with StandardStatus=Expired. NOTE: Does NOT filter by MlgCanView — we need to see all changes during replication."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.value.length }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ]
+        }
+      },
+      "id": "has_results",
+      "name": "Has Results?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "notes": "Only proceed if MLS Grid returned expired listings."
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "value",
+        "options": {}
+      },
+      "id": "split_records",
+      "name": "Split Into Items",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [880, -60],
+      "notes": "Splits the MLS Grid response array into individual items for processing."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.CountyOrParish }}",
+              "rightValue": "={{ $vars.FILTER_COUNTIES }}",
+              "operator": { "type": "string", "operation": "contains" }
+            },
+            {
+              "leftValue": "={{ $json.ListPrice }}",
+              "rightValue": "={{ $vars.FILTER_MIN_PRICE }}",
+              "operator": { "type": "number", "operation": "gte" }
+            },
+            {
+              "leftValue": "={{ $json.ListPrice }}",
+              "rightValue": "={{ $vars.FILTER_MAX_PRICE }}",
+              "operator": { "type": "number", "operation": "lte" }
+            }
+          ]
+        }
+      },
+      "id": "apply_client_filters",
+      "name": "Apply Client Filters",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1100, -60],
+      "notes": "Filters by county, price range. PropertyType is filtered server-side if possible, otherwise add here. Configure FILTER_COUNTIES, FILTER_MIN_PRICE, FILTER_MAX_PRICE as n8n variables."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.SUPABASE_URL }}/rest/v1/expired_listings?listing_key=eq.{{ $json.ListingKey }}&select=id",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        },
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "Bearer {{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        }
+      },
+      "id": "check_duplicate",
+      "name": "Check Duplicate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, -120],
+      "notes": "Checks Supabase to see if this listing_key already exists. If it does, skip it."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": { "type": "number", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "is_new",
+      "name": "Is New?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1540, -120],
+      "notes": "Only proceed if this listing hasn't been processed before."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.SUPABASE_URL }}/rest/v1/expired_listings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ listing_key: $('Split Into Items').item.json.ListingKey, listing_id: ($('Split Into Items').item.json.ListingId || '').replace('MFR', ''), street_number: $('Split Into Items').item.json.StreetNumber, street_name: $('Split Into Items').item.json.StreetName, street_suffix: $('Split Into Items').item.json.StreetSuffix, full_address: $('Split Into Items').item.json.UnparsedAddress || [$('Split Into Items').item.json.StreetNumber, $('Split Into Items').item.json.StreetName, $('Split Into Items').item.json.StreetSuffix].filter(Boolean).join(' '), city: $('Split Into Items').item.json.City, state: $('Split Into Items').item.json.StateOrProvince, zip: $('Split Into Items').item.json.PostalCode, county: $('Split Into Items').item.json.CountyOrParish, latitude: $('Split Into Items').item.json.Latitude, longitude: $('Split Into Items').item.json.Longitude, property_type: $('Split Into Items').item.json.PropertyType, property_subtype: $('Split Into Items').item.json.PropertySubType, bedrooms: $('Split Into Items').item.json.BedroomsTotal, bathrooms: $('Split Into Items').item.json.BathroomsTotalInteger, sqft: $('Split Into Items').item.json.LivingArea, year_built: $('Split Into Items').item.json.YearBuilt, list_price: $('Split Into Items').item.json.ListPrice, original_list_price: $('Split Into Items').item.json.OriginalListPrice, previous_list_price: $('Split Into Items').item.json.PreviousListPrice, listing_contract_date: $('Split Into Items').item.json.ListingContractDate, expired_date: $('Split Into Items').item.json.ModificationTimestamp, listing_agent_name: $('Split Into Items').item.json.ListAgentFullName, listing_agent_email: $('Split Into Items').item.json.ListAgentEmail, listing_agent_phone: $('Split Into Items').item.json.ListAgentDirectPhone, listing_office_name: $('Split Into Items').item.json.ListOfficeName, listing_office_phone: $('Split Into Items').item.json.ListOfficePhone, status: 'pending_skip_trace', raw_data: $('Split Into Items').item.json }) }}",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        },
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "Bearer {{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        }
+      },
+      "id": "insert_listing",
+      "name": "Insert into Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, -180],
+      "notes": "Inserts the new expired listing into Supabase with status pending_skip_trace."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.SUPABASE_URL }}/rest/v1/billing_tracker?month=eq.{{ new Date().toISOString().substring(0,7) }}&select=skip_traces_used,skip_trace_cap",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        },
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "Bearer {{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        }
+      },
+      "id": "check_billing_cap",
+      "name": "Check Billing Cap",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, -180],
+      "notes": "Checks if we've hit the monthly skip trace cap before proceeding."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json[0].skip_traces_used }}",
+              "rightValue": "={{ $json[0].skip_trace_cap }}",
+              "operator": { "type": "number", "operation": "lt" }
+            }
+          ]
+        }
+      },
+      "id": "under_cap",
+      "name": "Under Cap?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2200, -180],
+      "notes": "Routes based on whether we're under or over the monthly skip trace cap."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://tracerfy.com/v1/api/trace/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "address_column", "value": "address" },
+            { "name": "city_column", "value": "city" },
+            { "name": "state_column", "value": "state" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        },
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $vars.SKIP_TRACE_API_KEY }}" }
+          ]
+        }
+      },
+      "id": "submit_skip_trace",
+      "name": "Submit to Tracerfy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2420, -240],
+      "notes": "Submits the property address to Tracerfy for skip tracing. NOTE: This node needs a Code node before it to build the CSV file and attach it as form data. The CSV contains the address, city, state from the inserted listing."
+    },
+    {
+      "parameters": {
+        "amount": 60,
+        "unit": "seconds"
+      },
+      "id": "wait_for_trace",
+      "name": "Wait 60s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [2640, -240],
+      "notes": "Wait for Tracerfy to process the single record (~1 minute for 1 record)."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://tracerfy.com/v1/api/queue/{{ $('Submit to Tracerfy').item.json.queue_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        },
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $vars.SKIP_TRACE_API_KEY }}" }
+          ]
+        }
+      },
+      "id": "poll_trace_results",
+      "name": "Poll Tracerfy Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2860, -240],
+      "notes": "Polls Tracerfy for the skip trace results. If status is not complete, may need a retry loop."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.SUPABASE_URL }}/rest/v1/skip_trace_results",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=REPLACE_WITH_CODE_NODE_OUTPUT",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        },
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "Bearer {{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        }
+      },
+      "id": "store_trace_results",
+      "name": "Store Skip Trace Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3080, -240],
+      "notes": "Stores skip trace results in Supabase. A Code node before this should parse Tracerfy's response into the correct format (owner_name, phone_numbers, email_addresses, etc)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/contacts/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=REPLACE_WITH_CODE_NODE_OUTPUT",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        },
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $vars.GHL_API_KEY }}" },
+            { "name": "Version", "value": "2021-07-28" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        }
+      },
+      "id": "deliver_to_ghl",
+      "name": "Deliver to GoHighLevel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3300, -240],
+      "notes": "Creates a contact in GHL with standard fields (name, phone, email, address) + custom fields (price, beds, baths, MLS#, etc). A Code node should build the payload with the customFields array. Requires GHL_API_KEY and GHL_LOCATION_ID."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.SUPABASE_URL }}/rest/v1/delivery_log",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=REPLACE_WITH_CODE_NODE_OUTPUT",
+        "options": {},
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "Bearer {{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        }
+      },
+      "id": "log_delivery",
+      "name": "Log Delivery",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3520, -240],
+      "notes": "Logs the GHL delivery result to Supabase delivery_log table."
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $vars.SUPABASE_URL }}/rest/v1/expired_listings?listing_key=eq.{{ $('Split Into Items').item.json.ListingKey }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"status\": \"cap_reached\" }",
+        "options": {},
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "Bearer {{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        }
+      },
+      "id": "mark_cap_reached",
+      "name": "Mark Cap Reached",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2420, -60],
+      "notes": "When the monthly skip trace cap is hit, mark the listing as cap_reached so it's not retried."
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $vars.SUPABASE_URL }}/rest/v1/replication_state?resource=eq.Property",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=REPLACE_WITH_LATEST_MODIFICATION_TIMESTAMP",
+        "options": {},
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "Bearer {{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        }
+      },
+      "id": "update_timestamp",
+      "name": "Update Replication Timestamp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 120],
+      "notes": "Updates the replication_state table with the latest ModificationTimestamp from this batch. This should run AFTER all records are processed, using the MAX ModificationTimestamp from the response. Also runs on the 'no results' path to advance the timestamp."
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $vars.SUPABASE_URL }}/rest/v1/billing_tracker?month=eq.{{ new Date().toISOString().substring(0,7) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=REPLACE_WITH_INCREMENT_LOGIC",
+        "options": {},
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "Bearer {{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        }
+      },
+      "id": "increment_billing",
+      "name": "Increment Billing Counter",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3520, -120],
+      "notes": "Increments the skip_traces_used counter in billing_tracker after a successful skip trace."
+    }
+  ],
+  "connections": {
+    "Every 10 Minutes": {
+      "main": [[{ "node": "Get Last Timestamp", "type": "main", "index": 0 }]]
+    },
+    "Get Last Timestamp": {
+      "main": [[{ "node": "Query MLS Grid — Expired", "type": "main", "index": 0 }]]
+    },
+    "Query MLS Grid — Expired": {
+      "main": [[{ "node": "Has Results?", "type": "main", "index": 0 }]]
+    },
+    "Has Results?": {
+      "main": [
+        [{ "node": "Split Into Items", "type": "main", "index": 0 }],
+        [{ "node": "Update Replication Timestamp", "type": "main", "index": 0 }]
+      ]
+    },
+    "Split Into Items": {
+      "main": [[{ "node": "Apply Client Filters", "type": "main", "index": 0 }]]
+    },
+    "Apply Client Filters": {
+      "main": [
+        [{ "node": "Check Duplicate", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Check Duplicate": {
+      "main": [[{ "node": "Is New?", "type": "main", "index": 0 }]]
+    },
+    "Is New?": {
+      "main": [
+        [{ "node": "Insert into Supabase", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Insert into Supabase": {
+      "main": [[{ "node": "Check Billing Cap", "type": "main", "index": 0 }]]
+    },
+    "Check Billing Cap": {
+      "main": [[{ "node": "Under Cap?", "type": "main", "index": 0 }]]
+    },
+    "Under Cap?": {
+      "main": [
+        [{ "node": "Submit to Tracerfy", "type": "main", "index": 0 }],
+        [{ "node": "Mark Cap Reached", "type": "main", "index": 0 }]
+      ]
+    },
+    "Submit to Tracerfy": {
+      "main": [[{ "node": "Wait 60s", "type": "main", "index": 0 }]]
+    },
+    "Wait 60s": {
+      "main": [[{ "node": "Poll Tracerfy Results", "type": "main", "index": 0 }]]
+    },
+    "Poll Tracerfy Results": {
+      "main": [[{ "node": "Store Skip Trace Results", "type": "main", "index": 0 }]]
+    },
+    "Store Skip Trace Results": {
+      "main": [[{ "node": "Deliver to GoHighLevel", "type": "main", "index": 0 }]]
+    },
+    "Deliver to GoHighLevel": {
+      "main": [[{ "node": "Log Delivery", "type": "main", "index": 0 }]]
+    },
+    "Log Delivery": {
+      "main": [[{ "node": "Increment Billing Counter", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "_comment": "IMPORTANT IMPLEMENTATION NOTES: Several nodes have placeholder values (REPLACE_WITH_...) that need Code nodes inserted before them to transform data. Key areas: (1) Before Submit to Tracerfy — Code node to build CSV from listing address. (2) Before Store Skip Trace Results — Code node to parse Tracerfy response. (3) Before Deliver to GoHighLevel — Code node to build GHL payload with customFields. (4) Update Replication Timestamp — needs the MAX ModificationTimestamp from the batch. (5) Increment Billing — needs RPC call or read-modify-write pattern. (6) Pagination — if MLS Grid returns @odata.nextLink, need a loop to follow it. These will be finalized during n8n setup when we can test with live data."
+}

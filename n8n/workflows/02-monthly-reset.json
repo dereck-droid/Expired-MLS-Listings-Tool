@@ -1,0 +1,58 @@
+{
+  "name": "EquityPro — Monthly Billing Reset",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 1 * *"
+            }
+          ]
+        }
+      },
+      "id": "monthly_trigger",
+      "name": "1st of Every Month",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.SUPABASE_URL }}/rest/v1/billing_tracker",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ month: new Date().toISOString().substring(0,7), skip_trace_cap: 200, skip_traces_used: 0, total_listings_detected: 0 }) }}",
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        },
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "Bearer {{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        }
+      },
+      "id": "create_billing_row",
+      "name": "Create New Billing Row",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0],
+      "notes": "Creates a new billing_tracker row for the current month with skip_traces_used reset to 0."
+    }
+  ],
+  "connections": {
+    "1st of Every Month": {
+      "main": [[{ "node": "Create New Billing Row", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
