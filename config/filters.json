@@ -1,8 +1,0 @@
-{
-  "counties": ["Orange", "Seminole", "Osceola"],
-  "propertyTypes": ["Residential"],
-  "propertySubtypes": [],
-  "minPrice": 0,
-  "maxPrice": 999999999,
-  "notes": "These filters are applied client-side after MLS Grid query. Counties, property types, and price range are not searchable server-side — only StandardStatus, ModificationTimestamp, OriginatingSystemName, PropertyType, ListingId, MlgCanView, and ListOfficeMlsId are searchable in the API."
-}

@@ -20,31 +20,25 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $vars.SUPABASE_URL }}/rest/v1/billing_tracker",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ month: new Date().toISOString().substring(0,7), skip_trace_cap: 200, skip_traces_used: 0, total_listings_detected: 0 }) }}",
-        "options": {
-          "response": { "response": { "responseFormat": "json" } }
-        },
-        "headerParameters": {
-          "parameters": [
-            { "name": "apikey", "value": "={{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
-            { "name": "Authorization", "value": "Bearer {{ $vars.SUPABASE_SERVICE_ROLE_KEY }}" },
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "Prefer", "value": "return=representation" }
+        "operation": "create",
+        "tableId": "billing_tracker",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldName": "month", "fieldValue": "={{ new Date().toISOString().substring(0,7) }}" },
+            { "fieldName": "skip_trace_cap", "fieldValue": "200" },
+            { "fieldName": "skip_traces_used", "fieldValue": "0" },
+            { "fieldName": "total_listings_detected", "fieldValue": "0" }
           ]
-        }
+        },
+        "options": {}
       },
       "id": "create_billing_row",
       "name": "Create New Billing Row",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
       "position": [220, 0],
-      "notes": "Creates a new billing_tracker row for the current month with skip_traces_used reset to 0."
+      "credentials": { "supabaseApi": { "id": "CONFIGURE_IN_N8N", "name": "Supabase ALS Ops" } },
+      "notes": "Creates a new billing_tracker row for the current month with counters reset to 0."
     }
   ],
   "connections": {
