@@ -39,7 +39,7 @@
 
 ### 1. Create Supabase Credential
 Settings → Credentials → New → Supabase
-- **Host:** `https://nffwmjabrnjqealtpehs.supabase.co`
+- **Host:** `https://ojxwxvrpcztbyxkagymd.supabase.co`
 - **Service Role Key:** (from Supabase dashboard → Settings → API)
 - Name it: `Supabase ALS Ops`
 

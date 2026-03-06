@@ -528,8 +528,11 @@
     },
     "Has Results?": {
       "main": [
-        [{ "node": "Split Into Items", "type": "main", "index": 0 }],
-        [{ "node": "Update Replication Timestamp", "type": "main", "index": 0 }]
+        [
+          { "node": "Split Into Items", "type": "main", "index": 0 },
+          { "node": "Update Replication Timestamp", "type": "main", "index": 0 }
+        ],
+        []
       ]
     },
     "Split Into Items": {
@@ -591,8 +594,10 @@
     },
     "Log Delivery": {
       "main": [
-        [{ "node": "Mark Delivered", "type": "main", "index": 0 }],
-        [{ "node": "Increment Counter", "type": "main", "index": 0 }]
+        [
+          { "node": "Mark Delivered", "type": "main", "index": 0 },
+          { "node": "Increment Counter", "type": "main", "index": 0 }
+        ]
       ]
     },
     "Increment Counter": {
