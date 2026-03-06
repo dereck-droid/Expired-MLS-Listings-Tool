@@ -28,7 +28,7 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [220, 0],
-      "credentials": { "supabaseApi": { "id": "CONFIGURE_IN_N8N", "name": "Supabase ALS Ops" } },
+      "credentials": { "supabaseApi": { "id": "c7baSIKlfPd9o7mj", "name": "als-operations" } },
       "notes": "Reads the last ModificationTimestamp from replication_state to know where to resume polling."
     },
     {
@@ -132,7 +132,7 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [1320, -120],
-      "credentials": { "supabaseApi": { "id": "CONFIGURE_IN_N8N", "name": "Supabase ALS Ops" } },
+      "credentials": { "supabaseApi": { "id": "c7baSIKlfPd9o7mj", "name": "als-operations" } },
       "notes": "Checks if this listing_key already exists in Supabase. If found, skip it."
     },
     {
@@ -205,7 +205,7 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [1980, -180],
-      "credentials": { "supabaseApi": { "id": "CONFIGURE_IN_N8N", "name": "Supabase ALS Ops" } },
+      "credentials": { "supabaseApi": { "id": "c7baSIKlfPd9o7mj", "name": "als-operations" } },
       "notes": "Inserts the new expired listing into Supabase with status pending_skip_trace."
     },
     {
@@ -223,7 +223,7 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [2200, -180],
-      "credentials": { "supabaseApi": { "id": "CONFIGURE_IN_N8N", "name": "Supabase ALS Ops" } },
+      "credentials": { "supabaseApi": { "id": "c7baSIKlfPd9o7mj", "name": "als-operations" } },
       "notes": "Reads current month's skip trace usage to check against the cap."
     },
     {
@@ -356,7 +356,7 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [3740, -240],
-      "credentials": { "supabaseApi": { "id": "CONFIGURE_IN_N8N", "name": "Supabase ALS Ops" } },
+      "credentials": { "supabaseApi": { "id": "c7baSIKlfPd9o7mj", "name": "als-operations" } },
       "notes": "Saves the skip trace results to Supabase."
     },
     {
@@ -416,7 +416,7 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [4400, -240],
-      "credentials": { "supabaseApi": { "id": "CONFIGURE_IN_N8N", "name": "Supabase ALS Ops" } },
+      "credentials": { "supabaseApi": { "id": "c7baSIKlfPd9o7mj", "name": "als-operations" } },
       "notes": "Logs the successful delivery to Supabase."
     },
     {
@@ -437,7 +437,7 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [4620, -240],
-      "credentials": { "supabaseApi": { "id": "CONFIGURE_IN_N8N", "name": "Supabase ALS Ops" } },
+      "credentials": { "supabaseApi": { "id": "c7baSIKlfPd9o7mj", "name": "als-operations" } },
       "notes": "Updates the listing status to 'delivered' after successful GHL push."
     },
     {
@@ -469,7 +469,7 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [4840, -120],
-      "credentials": { "supabaseApi": { "id": "CONFIGURE_IN_N8N", "name": "Supabase ALS Ops" } },
+      "credentials": { "supabaseApi": { "id": "c7baSIKlfPd9o7mj", "name": "als-operations" } },
       "notes": "Updates the billing_tracker with incremented skip trace count."
     },
     {
@@ -490,7 +490,7 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [2640, -60],
-      "credentials": { "supabaseApi": { "id": "CONFIGURE_IN_N8N", "name": "Supabase ALS Ops" } },
+      "credentials": { "supabaseApi": { "id": "c7baSIKlfPd9o7mj", "name": "als-operations" } },
       "notes": "When monthly cap is hit, marks the listing so it won't be retried."
     },
     {
@@ -512,7 +512,7 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [880, 120],
-      "credentials": { "supabaseApi": { "id": "CONFIGURE_IN_N8N", "name": "Supabase ALS Ops" } },
+      "credentials": { "supabaseApi": { "id": "c7baSIKlfPd9o7mj", "name": "als-operations" } },
       "notes": "Stores the MAX ModificationTimestamp from this batch so the next poll picks up where we left off. Also runs on the 'no results' path."
     }
   ],

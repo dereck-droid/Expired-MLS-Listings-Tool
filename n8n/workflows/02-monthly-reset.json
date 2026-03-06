@@ -37,7 +37,7 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [220, 0],
-      "credentials": { "supabaseApi": { "id": "CONFIGURE_IN_N8N", "name": "Supabase ALS Ops" } },
+      "credentials": { "supabaseApi": { "id": "c7baSIKlfPd9o7mj", "name": "als-operations" } },
       "notes": "Creates a new billing_tracker row for the current month with counters reset to 0."
     }
   ],
